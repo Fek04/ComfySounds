@@ -17,7 +17,7 @@ module.exports = {
         //await interaction.deferReply();
 
         // If user not in vc, return
-        //console.log(interaction.member.voice.channel);
+        console.log(interaction.member.voice.channel);
 		if(!interaction.member.voice.channel) {
             await interaction.reply({ content: 'You can only use me if you are in a voice channel!', ephemeral: true });
                 return;
@@ -67,7 +67,7 @@ module.exports = {
 
             try {
 
-                //Establish connection to voice channel
+                //Establish connection to voice channel         
                 const connection =  joinVoiceChannel({
                     channelId: interaction.member.voice.channel.id,
                     guildId: interaction.guild.id,
@@ -98,7 +98,7 @@ const video_player = async (guild, song, queue, audioPlayer) => {
     //console.log(song_queue);
     // If queue does not have any more songs, destroy queue and connection
     if(!song) {
-        connection.destroy();
+        song_queue.connection.destroy();
         queue.delete(guild.id);
         return;
     }
@@ -106,21 +106,22 @@ const video_player = async (guild, song, queue, audioPlayer) => {
     // Establish AudioPlayer
     //let subscription;
     if(!audioPlayer){
-        console.log("in audioplayer if + " + song.url);
         audioPlayer = createAudioPlayer();
         song_queue.connection.subscribe(audioPlayer);
-        //subscription = new PlayerSubscription(song_queue.connection, audioPlayer);
     }
-    console.log(audioPlayer);
-    console.log(song_queue.connection);
+
     //Get stream using ytdl and play this stream
     const stream = ytdl(song.url, { filter: 'audioonly' });
-    let resource = createAudioResource(stream, {seek: 0, volume: 1});
+    let resource = createAudioResource(stream, { inlineVolume: true });
+    resource.volume.setVolume(0.5);
     audioPlayer.play(resource);
-    console.log(resource);
-    //audioPlayer.play(createAudioResource('/home/user/Desktop/Bots/ComfySounds/SymphonyNo6.mp3'));
+
+    audioPlayer.on(AudioPlayerStatus.Playing, () => {
+        console.log('The audio player has started playing!');
+    });
     audioPlayer.on(AudioPlayerStatus.Idle, () => {
         // If Song is finished play next song
+        console.log("Idle reached");
         song_queue.songs.shift();
         video_player(guild, song_queue.songs[0], queue, audioPlayer);
     });
