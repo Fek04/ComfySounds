@@ -71,7 +71,7 @@ module.exports = {
             }
         }
 
-        console.log(server_queue);
+        //console.log(server_queue);
         if(!server_queue){ // If no server queue exists, create new one and start playing songs
             
             // Queue Data
@@ -100,8 +100,9 @@ module.exports = {
                 video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction.client.player, interaction);
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
-                queue.delete(interaction.guildId);
-                await interaction.reply({ content: 'Error connecting to voice channel', ephemeral: true });
+                interaction.client.queue.delete(interaction.guildId);
+                console.log(error);
+                await interaction.reply({ content: 'Error connecting to voice channel: ' + error, ephemeral: true });
                 return;
             }
         }else{ // server_queue exists
@@ -128,21 +129,19 @@ const video_player = (guild, song, queue, audioPlayer, interaction) => {
     // Establish AudioPlayer
     //let subscription;
     if(!audioPlayer){
+        console.log("AAAAAAAAAAAAAAAAAA");
         audioPlayer = createAudioPlayer();
         song_queue.connection.subscribe(audioPlayer);
         interaction.client.player = audioPlayer;
     }
 
     //Get stream using ytdl and play this stream
-    const stream = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 });
-    let resource = createAudioResource(stream, { inlineVolume: true });
-    resource.volume.setVolume(0.5);
-    audioPlayer.play(resource);
+    audioPlayer.play(createAudioResource(ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 })));
 
-    audioPlayer.on(AudioPlayerStatus.Playing, () => {
+    audioPlayer.once(AudioPlayerStatus.Playing, () => {
         console.log('The audio player has started playing!');
     });
-    audioPlayer.on(AudioPlayerStatus.Idle, () => {
+    audioPlayer.once(AudioPlayerStatus.Idle, () => {
         // If Song is finished play next song
         console.log("Idle reached");
         song_queue.songs.shift();
