@@ -1,8 +1,16 @@
-const {SlashCommandBuilder, Events } = require('discord.js');
+const { hyperlink, hideLinkEmbed, SlashCommandBuilder, Events } = require('discord.js');
 const { getVoiceConnection, joinVoiceChannel, AudioPlayerStatus, createAudioResource, getNextResource, createAudioPlayer, NoSubscriberBehavior, PlayerSubscription } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
-const fs = require('node:fs');
+const Spotify = require('node-spotify-api');
+const spotifyURI = require('spotify-uri');
+const { sptfClientId, sptfClientScrt } = require('../config.json');
+
+
+const spotify = new Spotify({
+    id: sptfClientId,
+    secret: sptfClientScrt,
+});
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -17,7 +25,6 @@ module.exports = {
         //await interaction.deferReply();
 
         // If user not in vc, return
-        console.log(interaction.member.voice.channel);
 		if(!interaction.member.voice.channel) {
             await interaction.reply({ content: 'You can only use me if you are in a voice channel!', ephemeral: true });
                 return;
@@ -29,11 +36,25 @@ module.exports = {
         let fedUrl = interaction.options.getString('url');
         let song = {};
 
+        const spotifyPattern = /^.*(https:\/\/open\.spotify\.com\/track)([^#\&\?]*).*/gi;
+
         // Get a song with url
         if(ytdl.validateURL(fedUrl)){
             const song_info = await ytdl.getInfo(fedUrl);
-            song = { title: song_info.videoDetails.title, url: song_info.videoDetails.url };
-        }else{ // Get a song using keywords
+            song = { title: song_info.videoDetails.title, url: fedUrl };
+        }else{ // Get a song using keywords or spotify
+
+            if(spotifyPattern.test(fedUrl)){ // If spotify link parse link to "artist - title"
+                const spotifyTrackID = spotifyURI.parse(fedUrl).id;
+                let spotifyInfo;
+                try{
+                    spotifyInfo = await spotify.request(`https://api.spotify.com/v1/tracks/${spotifyTrackID}`);
+                }catch(error){
+                    await interaction.reply({ content: `Error getting spotify track: ${error}`, ephemeral: true });
+                    return;
+                }
+                fedUrl = spotifyInfo.artists[0].name + " - " + spotifyInfo.name;
+            }
 
             // videoFinder function for finding videos with keywords
             const videoFinder = async (query) => {
@@ -50,7 +71,7 @@ module.exports = {
             }
         }
 
-        
+        console.log(server_queue);
         if(!server_queue){ // If no server queue exists, create new one and start playing songs
             
             // Queue Data
@@ -76,7 +97,7 @@ module.exports = {
                 queue_constructor.connection = connection;
 
                 //play video
-                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, null);
+                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction.client.player, interaction);
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
                 queue.delete(interaction.guildId);
@@ -86,19 +107,20 @@ module.exports = {
         }else{ // server_queue exists
             server_queue.songs.push(song);
         }
-        await interaction.reply(`"${song.title}" added to queue.`);
+        await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
         return;
         
 	},
 };
 
-const video_player = async (guild, song, queue, audioPlayer) => {
+const video_player = (guild, song, queue, audioPlayer, interaction) => {
     const song_queue = queue.get(guild.id);
     //console.log(guild.id);
     //console.log(song_queue);
     // If queue does not have any more songs, destroy queue and connection
     if(!song) {
         song_queue.connection.destroy();
+        interaction.client.player = undefined;
         queue.delete(guild.id);
         return;
     }
@@ -108,10 +130,11 @@ const video_player = async (guild, song, queue, audioPlayer) => {
     if(!audioPlayer){
         audioPlayer = createAudioPlayer();
         song_queue.connection.subscribe(audioPlayer);
+        interaction.client.player = audioPlayer;
     }
 
     //Get stream using ytdl and play this stream
-    const stream = ytdl(song.url, { filter: 'audioonly' });
+    const stream = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 });
     let resource = createAudioResource(stream, { inlineVolume: true });
     resource.volume.setVolume(0.5);
     audioPlayer.play(resource);
@@ -123,7 +146,7 @@ const video_player = async (guild, song, queue, audioPlayer) => {
         // If Song is finished play next song
         console.log("Idle reached");
         song_queue.songs.shift();
-        video_player(guild, song_queue.songs[0], queue, audioPlayer);
+        video_player(guild, song_queue.songs[0], queue, audioPlayer, interaction);
     });
-    song_queue.text_channel.send(`Now playing "${song.title}"`)
+    song_queue.text_channel.send(`Now playing "${song.title}"`);
 }
