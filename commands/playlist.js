@@ -6,72 +6,65 @@ const Spotify = require('node-spotify-api');
 const spotifyURI = require('spotify-uri');
 const { sptfClientId, sptfClientScrt } = require('../config.json');
 
+const fetch = require('isomorphic-unfetch');
+const { getTracks } = require('spotify-url-info')(fetch);
 
-const spotify = new Spotify({
-    id: sptfClientId,
-    secret: sptfClientScrt,
-});
+const wait = require('node:timers/promises').setTimeout;
+
 
 module.exports = {
 	data: new SlashCommandBuilder()
-		.setName('play')
-		.setDescription('plays a youtube url or searches for a video using keywords')
+		.setName('playlist')
+		.setDescription('plays a spotify playlist or album')
         .addStringOption(option =>
             option.setName('url')
-                .setDescription('youtube url or keywords')
+                .setDescription('spotify playlist url')
                 .setRequired(true)),
 	async execute(interaction) {
-        // Defer Reply for the case that the bot takes too long
-        //await interaction.deferReply();
-        
         // If user not in vc, return
 		if(!interaction.member.voice.channel) {
             await interaction.reply({ content: 'You can only use me if you are in a voice channel!', ephemeral: true });
-                return;
+            return;
         }
 
         // Get server queue from all queues
         const server_queue = interaction.client.queue.get(interaction.guildId);
 
+        const spotifyPlaylistPattern = /^.*(https:\/\/open\.spotify\.com\/playlist)([^#\&\?]*).*/gi;
         let fedUrl = interaction.options.getString('url');
-        let song = {};
 
-        const spotifyPattern = /^.*(https:\/\/open\.spotify\.com\/track)([^#\&\?]*).*/gi;
-
-        // Get a song with url
-        if(ytdl.validateURL(fedUrl)){
-            const song_info = await ytdl.getInfo(fedUrl);
-            song = { title: song_info.videoDetails.title, url: fedUrl };
-        }else{ // Get a song using keywords or spotify
-
-            if(spotifyPattern.test(fedUrl)){ // If spotify link parse link to "artist - title"
-                const spotifyTrackID = spotifyURI.parse(fedUrl).id;
-                let spotifyInfo;
-                try{
-                    spotifyInfo = await spotify.request(`https://api.spotify.com/v1/tracks/${spotifyTrackID}`);
-                }catch(error){
-                    await interaction.reply({ content: `Error getting spotify track: ${error}`, ephemeral: true });
-                    return;
-                }
-                fedUrl = spotifyInfo.artists[0].name + " - " + spotifyInfo.name;
-            }
-
-            // videoFinder function for finding videos with keywords
-            const videoFinder = async (query) => {
-                const videoResult = await ytSearch(query);
-                return (videoResult.videos.length > 1) ? videoResult.videos[0] : null;
-            }
-
-            const video = await videoFinder(fedUrl);
-            if(video){ // video was found
-                song = { title: video.title, url: video.url };
-            }else{ // no video found -> show secret error message
-                await interaction.reply({ content: 'Error finding video', ephemeral: true });
-                return;
-            }
+        if(!spotifyPlaylistPattern.test(fedUrl)){
+            await interaction.reply({ content: 'The provided url is not a valid spotify playlist!', ephemeral: true });
+            return;
         }
 
-        //console.log(server_queue);
+        // Defer Reply for the case that the bot takes too long
+        await interaction.deferReply();
+
+        let playlistTracks;
+        try{
+            playlistTracks = await getTracks(fedUrl);
+        }catch(error){
+            console.log(error);
+        }
+
+        // videoFinder function for finding videos with keywords
+        const videoFinder = async (query) => {
+            const videoResult = await ytSearch(query);
+            return (videoResult.videos.length > 1) ? videoResult.videos[0] : null;
+        }
+
+        const songs = [];
+        await playlistTracks.forEach(async song => {
+            const video = await videoFinder(song.artist + " - " + song.name);
+            if(video){
+                songs.push({ title: video.title, url: video.url });
+            }else{
+                console.log("Error finding song: " + song);
+            }
+        });
+        await wait(playlistTracks.length*800);
+
         if(!server_queue){ // If no server queue exists, create new one and start playing songs
             
             // Queue Data
@@ -84,7 +77,7 @@ module.exports = {
             
             // Queue entry in map
             interaction.client.queue.set(interaction.guildId, queue_constructor);
-            queue_constructor.songs.push(song);
+            queue_constructor.songs = queue_constructor.songs.concat(songs);
 
             try {
 
@@ -101,18 +94,19 @@ module.exports = {
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
                 interaction.client.queue.delete(interaction.guildId);
-                console.log(error);
-                await interaction.reply({ content: 'Error connecting to voice channel: ' + error, ephemeral: true });
+                await interaction.editReply('Error connecting to voice channel: ' + error);
                 return;
             }
         }else{ // server_queue exists
-            server_queue.songs.push(song);
+            console.log(songs);
+            server_queue.songs = server_queue.songs.concat(songs);
+            console.log(server_queue.songs);
         }
-        await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
+
+        await interaction.editReply(`Playlist added to queue.`);
         return;
-        
-	},
-};
+    }
+}
 
 const video_player = (guild, song, queue, audioPlayer, interaction) => {
     const song_queue = queue.get(guild.id);
