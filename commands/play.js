@@ -19,7 +19,11 @@ module.exports = {
         .addStringOption(option =>
             option.setName('url')
                 .setDescription('youtube url or keywords')
-                .setRequired(true)),
+                .setRequired(true))
+        .addBooleanOption(option =>
+            option.setName('prio')
+                .setDescription('queues a song to the front of the queue')
+                .setRequired(false)),
 	async execute(interaction) {
         // Defer Reply for the case that the bot takes too long
         //await interaction.deferReply();
@@ -79,6 +83,7 @@ module.exports = {
                 voice_channel: interaction.member.voice.channel,
                 text_channel: interaction.channel,
                 connection: null,
+                player: undefined,
                 songs: []
             }
             
@@ -96,32 +101,39 @@ module.exports = {
                 });
                 queue_constructor.connection = connection;
 
+                await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
                 //play video
-                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction.client.player, interaction);
+                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction);
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
+                interaction.channel.send('Error connecting to voice channel: ' + error);
                 interaction.client.queue.delete(interaction.guildId);
                 console.log(error);
-                await interaction.reply({ content: 'Error connecting to voice channel: ' + error, ephemeral: true });
                 return;
             }
         }else{ // server_queue exists
-            server_queue.songs.push(song);
+            if (interaction.options.getBoolean('prio')) {
+                server_queue.songs.splice(1,0,song);
+            } else {
+                server_queue.songs.push(song);
+            }
+            await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
         }
-        await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
         return;
         
 	},
 };
 
-const video_player = (guild, song, queue, audioPlayer, interaction) => {
+const video_player = (guild, song, queue, interaction) => {
     const song_queue = queue.get(guild.id);
     //console.log(guild.id);
     //console.log(song_queue);
+    let audioPlayer = song_queue.player;
+
     // If queue does not have any more songs, destroy queue and connection
     if(!song) {
         song_queue.connection.destroy();
-        interaction.client.player = undefined;
+        song_queue.player = undefined;
         queue.delete(guild.id);
         return;
     }
@@ -131,7 +143,7 @@ const video_player = (guild, song, queue, audioPlayer, interaction) => {
     if(!audioPlayer){
         audioPlayer = createAudioPlayer();
         song_queue.connection.subscribe(audioPlayer);
-        interaction.client.player = audioPlayer;
+        song_queue.player = audioPlayer;
     }
 
     //Get stream using ytdl and play this stream
@@ -159,6 +171,6 @@ const video_player = (guild, song, queue, audioPlayer, interaction) => {
         // If Song is finished play next song
         console.log("Idle reached");
         song_queue.songs.shift();
-        video_player(guild, song_queue.songs[0], queue, audioPlayer, interaction);
+        video_player(guild, song_queue.songs[0], queue, interaction);
     });
 }

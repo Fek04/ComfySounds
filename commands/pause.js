@@ -2,15 +2,15 @@ const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
 	data: new SlashCommandBuilder()
-		.setName('skip')
-		.setDescription('skips the current song'),
+		.setName('pause')
+		.setDescription('pauses the player'),
 	async execute(interaction) {
         server_queue = interaction.client.queue.get(interaction.guildId);
         if(server_queue){
-            server_queue.player.stop();
-            await interaction.reply('Skipped!');
+            server_queue.player.pause();
+            await interaction.reply('Paused!');
         }else{
-            await interaction.reply("You can't skip nothing, silly");
+            await interaction.reply("You can't pause nothing, silly");
         }
 
 	},
