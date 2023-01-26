@@ -34,10 +34,10 @@ rest.put(Routes.applicationCommands(clientId), { body: [] })
 		// The put method is used to fully refresh all commands in the guild with the current set
 		const data = await rest.put(
 
-			//Routes.applicationCommands(clientId), //when I want global change
-
-            Routes.applicationGuildCommands(clientId, guildId), //when I want change for test server
-			{ body: commands },
+			Routes.applicationCommands(clientId), //when I want global change
+			{ body: commands }
+            //Routes.applicationGuildCommands(clientId, guildId), //when I want change for test server
+			//{ body: commands },
 		);
 
 		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
