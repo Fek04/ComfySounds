@@ -28,13 +28,18 @@ module.exports = {
             return;
         }
 
+        //console.log(await getTracks(interaction.options.getString('url')));
+        //return;
+
         // Get server queue from all queues
         const server_queue = interaction.client.queue.get(interaction.guildId);
 
         const spotifyPlaylistPattern = /^.*(https:\/\/open\.spotify\.com\/playlist)([^#\&\?]*).*/gi;
+        const spotifyAlbumPattern = /^.*(https:\/\/open\.spotify\.com\/album)([^#\&\?]*).*/gi;
+
         let fedUrl = interaction.options.getString('url');
 
-        if(!spotifyPlaylistPattern.test(fedUrl)){
+        if(!spotifyPlaylistPattern.test(fedUrl) && !spotifyAlbumPattern.test(fedUrl)){
             await interaction.reply({ content: 'The provided url is not a valid spotify playlist!', ephemeral: true });
             return;
         }

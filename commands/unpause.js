@@ -10,7 +10,7 @@ module.exports = {
             server_queue.player.unpause();
             await interaction.reply('Unpaused!');
         }else{
-            await interaction.reply("You can't unpause nothing, silly");
+            await interaction.reply({ content:"You can't unpause nothing, silly", ephemeral: true });
         }
 
 	},

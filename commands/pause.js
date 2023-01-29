@@ -10,7 +10,7 @@ module.exports = {
             server_queue.player.pause();
             await interaction.reply('Paused!');
         }else{
-            await interaction.reply("You can't pause nothing, silly");
+            await interaction.reply({ content:"You can't pause nothing, silly", ephemeral: true });
         }
 
 	},

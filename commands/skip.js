@@ -10,7 +10,7 @@ module.exports = {
             server_queue.player.stop();
             await interaction.reply('Skipped!');
         }else{
-            await interaction.reply("You can't skip nothing, silly");
+            await interaction.reply({ content:"You can't skip nothing, silly", ephemeral: true });
         }
 
 	},
