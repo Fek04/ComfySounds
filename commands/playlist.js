@@ -78,6 +78,7 @@ module.exports = {
                 text_channel: interaction.channel,
                 connection: null,
                 player: undefined,
+                hue_value: Math.floor(Math.random() * 360),
                 songs: []
             }
             

@@ -16,6 +16,19 @@ const client = new Client({ intents:
 // Attach all queues to instance 
 client.queue = new Map();
 
+//converts hsl colors to hex colors
+function hslToHex(h, s, l) {
+    l /= 100;
+    const a = s * Math.min(l, 1 - l) / 100;
+    const f = n => {
+      const k = (n + h / 30) % 12;
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * color).toString(16).padStart(2, '0');   // convert to Hex and prefix "0" if needed
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  }
+
+// function that keeps playing all the songs, attached to client to make it global
 client.video_player = (interaction) => {
 	const guild = interaction.guild;
     const song_queue = interaction.client.queue.get(guild.id);
@@ -31,6 +44,8 @@ client.video_player = (interaction) => {
         return;
     }
 
+    song_queue.hue_value = (song_queue.hue_value + 15) % 360;
+
     // Establish AudioPlayer
     if(!audioPlayer){
         audioPlayer = createAudioPlayer();
@@ -44,7 +59,7 @@ client.video_player = (interaction) => {
         let songLength = new Date(info.videoDetails.lengthSeconds * 1000).toISOString().slice(11, 19);
 
         let songEmbed = new EmbedBuilder()
-            .setColor('#fbbbea')
+            .setColor(hslToHex(song_queue.hue_value,100,75))
             .setTitle(song.title)
             .setURL(song.url)
             .addFields(

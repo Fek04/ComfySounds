@@ -9,7 +9,7 @@ module.exports = {
         server_queue = interaction.client.queue.get(interaction.guildId);
         if(server_queue && server_queue.songs.length > 1){
 
-            let workingQueue = server_queue.songs.slice(1,-1);
+            let workingQueue = server_queue.songs.slice(1, server_queue.songs.length);
             
             const embed = generateEmbed(workingQueue,0);
             
