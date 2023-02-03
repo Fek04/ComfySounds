@@ -1,11 +1,7 @@
-const { hyperlink, hideLinkEmbed, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getVoiceConnection, joinVoiceChannel, AudioPlayerStatus, createAudioResource, getNextResource, createAudioPlayer, NoSubscriberBehavior, PlayerSubscription } = require('@discordjs/voice');
-const ytdl = require('ytdl-core');
-const ytSearch = require('yt-search');
+const { SlashCommandBuilder } = require('discord.js');
+const { joinVoiceChannel } = require('@discordjs/voice');
+
 const ytsr = require('ytsr');
-const Spotify = require('node-spotify-api');
-const spotifyURI = require('spotify-uri');
-const { sptfClientId, sptfClientScrt } = require('../config.json');
 
 const fetch = require('isomorphic-unfetch');
 const { getTracks } = require('spotify-url-info')(fetch);
@@ -27,9 +23,6 @@ module.exports = {
             await interaction.reply({ content: 'You can only use me if you are in a voice channel!', ephemeral: true });
             return;
         }
-
-        //console.log(await getTracks(interaction.options.getString('url')));
-        //return;
 
         // Get server queue from all queues
         const server_queue = interaction.client.queue.get(interaction.guildId);
@@ -59,7 +52,6 @@ module.exports = {
             console.log(query);
             try {
                 const videoResult = await ytsr(query, {limit: 1});
-                //console.log(videoResult.items[0].title);
                 return (videoResult.items.length >= 1) ? videoResult.items[0] : null;
             } catch (error) {
                 console.log("AAAAAAAAAAAAa  \n"+error);
@@ -96,7 +88,7 @@ module.exports = {
             try {
 
                 //Establish connection to voice channel         
-                const connection =  joinVoiceChannel({
+                const connection = joinVoiceChannel({
                     channelId: interaction.member.voice.channel.id,
                     guildId: interaction.guild.id,
                     adapterCreator: interaction.guild.voiceAdapterCreator
@@ -104,7 +96,7 @@ module.exports = {
                 queue_constructor.connection = connection;
 
                 //play video
-                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction);
+                interaction.client.video_player(interaction);
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
                 interaction.client.queue.delete(interaction.guildId);
@@ -112,62 +104,10 @@ module.exports = {
                 return;
             }
         }else{ // server_queue exists
-            //console.log(songs);
             server_queue.songs = server_queue.songs.concat(songs);
-            //console.log(server_queue.songs);
         }
 
         await interaction.editReply(`Playlist added to queue.`);
         return;
     }
-}
-
-const video_player = (guild, song, queue, interaction) => {
-    const song_queue = queue.get(guild.id);
-    //console.log(guild.id);
-    //console.log(song_queue);
-    let audioPlayer = song_queue.player;
-    // If queue does not have any more songs, destroy queue and connection
-    if(!song) {
-        song_queue.connection.destroy();
-        song_queue.player = undefined;
-        queue.delete(guild.id);
-        return;
-    }
-
-    // Establish AudioPlayer
-    //let subscription;
-    if(!audioPlayer){
-        audioPlayer = createAudioPlayer();
-        song_queue.connection.subscribe(audioPlayer);
-        song_queue.player = audioPlayer;
-    }
-
-    //Get stream using ytdl and play this stream
-    const next = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 }).
-    on('info', (info) => {
-        let songLength = new Date(info.videoDetails.lengthSeconds * 1000).toISOString().slice(11, 19);
-
-        let songEmbed = new EmbedBuilder()
-            .setColor('#fbbbea')
-            .setTitle(song.title)
-            .setURL(song.url)
-            .addFields(
-                { name: 'View Count', value: info.videoDetails.viewCount, inline: true},
-                { name: 'Length', value: songLength, inline: true},
-            )
-            .setImage(info.videoDetails.thumbnails[info.videoDetails.thumbnails.length-1].url);
-        song_queue.text_channel.send({ embeds: [songEmbed]});
-    });
-    audioPlayer.play(createAudioResource(next));
-
-    audioPlayer.once(AudioPlayerStatus.Playing, () => {
-        console.log('The audio player has started playing!');
-    });
-    audioPlayer.once(AudioPlayerStatus.Idle, () => {
-        // If Song is finished play next song
-        console.log("Idle reached");
-        song_queue.songs.shift();
-        video_player(guild, song_queue.songs[0], queue, interaction);
-    });
 }

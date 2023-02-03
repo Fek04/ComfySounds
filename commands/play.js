@@ -1,16 +1,13 @@
-const { hyperlink, hideLinkEmbed, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getVoiceConnection, joinVoiceChannel, AudioPlayerStatus, createAudioResource, getNextResource, createAudioPlayer, NoSubscriberBehavior, PlayerSubscription } = require('@discordjs/voice');
+const { hyperlink, hideLinkEmbed, SlashCommandBuilder } = require('discord.js');
+const { joinVoiceChannel } = require('@discordjs/voice');
+
 const ytdl = require('ytdl-core');
-const ytSearch = require('yt-search');
-const Spotify = require('node-spotify-api');
-const spotifyURI = require('spotify-uri');
-const { sptfClientId, sptfClientScrt } = require('../config.json');
+const ytsr = require('ytsr');
 
+const fetch = require('isomorphic-unfetch');
+const { getPreview } = require('spotify-url-info')(fetch);
 
-const spotify = new Spotify({
-    id: sptfClientId,
-    secret: sptfClientScrt,
-});
+const wait = require('node:timers/promises').setTimeout;
 
 module.exports = {
 	data: new SlashCommandBuilder()
@@ -25,8 +22,6 @@ module.exports = {
                 .setDescription('queues a song to the front of the queue')
                 .setRequired(false)),
 	async execute(interaction) {
-        // Defer Reply for the case that the bot takes too long
-        //await interaction.deferReply();
         
         // If user not in vc, return
 		if(!interaction.member.voice.channel) {
@@ -48,22 +43,25 @@ module.exports = {
             song = { title: song_info.videoDetails.title, url: fedUrl };
         }else{ // Get a song using keywords or spotify
 
-            if(spotifyPattern.test(fedUrl)){ // If spotify link parse link to "artist - title"
-                const spotifyTrackID = spotifyURI.parse(fedUrl).id;
-                let spotifyInfo;
-                try{
-                    spotifyInfo = await spotify.request(`https://api.spotify.com/v1/tracks/${spotifyTrackID}`);
-                }catch(error){
-                    await interaction.reply({ content: `Error getting spotify track: ${error}`, ephemeral: true });
-                    return;
+            if(spotifyPattern.test(fedUrl)){
+                try {
+                    await getPreview(fedUrl).then(data => fedUrl = data.artist + " - " + data.title);
+                } catch (error) {
+                    console.log(error);
                 }
-                fedUrl = spotifyInfo.artists[0].name + " - " + spotifyInfo.name;
+                await wait(20);
             }
 
             // videoFinder function for finding videos with keywords
             const videoFinder = async (query) => {
-                const videoResult = await ytSearch(query);
-                return (videoResult.videos.length > 1) ? videoResult.videos[0] : null;
+                console.log(query);
+                try {
+                    const videoResult = await ytsr(query, {limit: 1});
+                    return (videoResult.items.length >= 1) ? videoResult.items[0] : null;
+                } catch (error) {
+                    console.log("AAAAAAAAAAAAa  \n"+error);
+                    return null;
+                }
             }
 
             const video = await videoFinder(fedUrl);
@@ -75,7 +73,6 @@ module.exports = {
             }
         }
 
-        //console.log(server_queue);
         if(!server_queue){ // If no server queue exists, create new one and start playing songs
             
             // Queue Data
@@ -94,7 +91,7 @@ module.exports = {
             try {
 
                 //Establish connection to voice channel         
-                const connection =  joinVoiceChannel({
+                const connection = joinVoiceChannel({
                     channelId: interaction.member.voice.channel.id,
                     guildId: interaction.guild.id,
                     adapterCreator: interaction.guild.voiceAdapterCreator
@@ -103,7 +100,7 @@ module.exports = {
 
                 await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
                 //play video
-                video_player(interaction.guild, queue_constructor.songs[0], interaction.client.queue, interaction);
+                interaction.client.video_player(interaction);
             } catch (error) { 
                 // Player couldnt connect to voice, so kill queue and throw error
                 interaction.channel.send('Error connecting to voice channel: ' + error);
@@ -124,53 +121,3 @@ module.exports = {
 	},
 };
 
-const video_player = (guild, song, queue, interaction) => {
-    const song_queue = queue.get(guild.id);
-    //console.log(guild.id);
-    //console.log(song_queue);
-    let audioPlayer = song_queue.player;
-
-    // If queue does not have any more songs, destroy queue and connection
-    if(!song) {
-        song_queue.connection.destroy();
-        song_queue.player = undefined;
-        queue.delete(guild.id);
-        return;
-    }
-
-    // Establish AudioPlayer
-    //let subscription;
-    if(!audioPlayer){
-        audioPlayer = createAudioPlayer();
-        song_queue.connection.subscribe(audioPlayer);
-        song_queue.player = audioPlayer;
-    }
-
-    //Get stream using ytdl and play this stream
-    const next = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 }).
-    on('info', (info) => {
-        let songLength = new Date(info.videoDetails.lengthSeconds * 1000).toISOString().slice(11, 19);
-
-        let songEmbed = new EmbedBuilder()
-            .setColor('#fbbbea')
-            .setTitle(song.title)
-            .setURL(song.url)
-            .addFields(
-                { name: 'View Count', value: info.videoDetails.viewCount, inline: true},
-                { name: 'Length', value: songLength, inline: true},
-            )
-            .setImage(info.videoDetails.thumbnails[info.videoDetails.thumbnails.length-1].url);
-        song_queue.text_channel.send({ embeds: [songEmbed]});
-    });
-    audioPlayer.play(createAudioResource(next));
-
-    audioPlayer.once(AudioPlayerStatus.Playing, () => {
-        console.log('The audio player has started playing!');
-    });
-    audioPlayer.once(AudioPlayerStatus.Idle, () => {
-        // If Song is finished play next song
-        console.log("Idle reached");
-        song_queue.songs.shift();
-        video_player(guild, song_queue.songs[0], queue, interaction);
-    });
-}

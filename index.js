@@ -1,7 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const ytdl = require('ytdl-core');
+
 // Require the necessary discord.js classes
-const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
+const { Client, Collection, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { AudioPlayerStatus, createAudioResource, createAudioPlayer } = require('@discordjs/voice');
+
 const { token } = require('./config.json');
 
 // Create a new client instance
@@ -11,6 +15,57 @@ const client = new Client({ intents:
 
 // Attach all queues to instance 
 client.queue = new Map();
+
+client.video_player = (interaction) => {
+	const guild = interaction.guild;
+    const song_queue = interaction.client.queue.get(guild.id);
+	const song = song_queue.songs[0];
+
+    let audioPlayer = song_queue.player;
+
+    // If queue does not have any more songs, destroy queue and connection
+    if(!song) {
+        song_queue.connection.destroy();
+        song_queue.player = undefined;
+        interaction.client.queue.delete(guild.id);
+        return;
+    }
+
+    // Establish AudioPlayer
+    if(!audioPlayer){
+        audioPlayer = createAudioPlayer();
+        song_queue.connection.subscribe(audioPlayer);
+        song_queue.player = audioPlayer;
+    }
+
+    //Get stream using ytdl and play this stream
+    const next = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 }).
+    on('info', (info) => {
+        let songLength = new Date(info.videoDetails.lengthSeconds * 1000).toISOString().slice(11, 19);
+
+        let songEmbed = new EmbedBuilder()
+            .setColor('#fbbbea')
+            .setTitle(song.title)
+            .setURL(song.url)
+            .addFields(
+                { name: 'View Count', value: info.videoDetails.viewCount, inline: true},
+                { name: 'Length', value: songLength, inline: true},
+            )
+            .setImage(info.videoDetails.thumbnails[info.videoDetails.thumbnails.length-1].url);
+        song_queue.text_channel.send({ embeds: [songEmbed]});
+    });
+    audioPlayer.play(createAudioResource(next));
+
+    audioPlayer.once(AudioPlayerStatus.Playing, () => {
+        console.log('The audio player has started playing!');
+    });
+    audioPlayer.once(AudioPlayerStatus.Idle, () => {
+        // If Song is finished play next song
+        console.log("Idle reached");
+        song_queue.songs.shift();
+        interaction.client.video_player(interaction);
+    });
+}
 
 //------------Event Handler---------------------
 
