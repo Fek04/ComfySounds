@@ -1,6 +1,8 @@
 const { hyperlink, hideLinkEmbed, SlashCommandBuilder } = require('discord.js');
 const { joinVoiceChannel } = require('@discordjs/voice');
 
+const { VoiceConnectionStatus } = require('@discordjs/voice');
+
 const ytdl = require('ytdl-core');
 const ytsr = require('ytsr');
 
@@ -98,6 +100,31 @@ module.exports = {
                     adapterCreator: interaction.guild.voiceAdapterCreator
                 });
                 queue_constructor.connection = connection;
+
+                // Temporary Fix because songs would abruptly stop after a minute or so
+                /*connection.on("stateChange", (oldState, newState) => {
+                    if (
+                      oldState.status === VoiceConnectionStatus.Ready &&
+                      newState.status === VoiceConnectionStatus.Connecting
+                    ) {
+                      connection.configureNetworking();
+                    }
+              
+                    // Seems to eliminate some keepAlive timer that's making the bot auto-pause
+                    const oldNetworking = Reflect.get(oldState, "networking");
+                    const newNetworking = Reflect.get(newState, "networking");
+              
+                    const networkStateChangeHandler = (
+                      oldNetworkState,
+                      newNetworkState
+                    ) => {
+                      const newUdp = Reflect.get(newNetworkState, "udp");
+                      clearInterval(newUdp?.keepAliveInterval);
+                    };
+              
+                    oldNetworking?.off("stateChange", networkStateChangeHandler);
+                    newNetworking?.on("stateChange", networkStateChangeHandler);
+                  });*/
 
                 await interaction.reply(`"${hyperlink(song.title, hideLinkEmbed(song.url))}" added to queue.`);
                 //play video

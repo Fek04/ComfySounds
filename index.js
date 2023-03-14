@@ -53,8 +53,8 @@ client.video_player = (interaction) => {
         song_queue.player = audioPlayer;
     }
 
-    //Get stream using ytdl and play this stream
-    const next = ytdl(song.url, { filter: 'audioonly', highWaterMark: 1<<25, bitrate: 200 }).
+    //Get stream using ytdl and play this stream // 
+    const next = ytdl(song.url, { filter: 'audioonly' , highWaterMark: 1<<25, bitrate: 200 }).
     on('info', (info) => {
         let songLength = new Date(info.videoDetails.lengthSeconds * 1000).toISOString().slice(11, 19);
 
@@ -69,6 +69,7 @@ client.video_player = (interaction) => {
             .setImage(info.videoDetails.thumbnails[info.videoDetails.thumbnails.length-1].url);
         song_queue.text_channel.send({ embeds: [songEmbed]});
     });
+
     audioPlayer.play(createAudioResource(next));
 
     audioPlayer.once(AudioPlayerStatus.Playing, () => {
