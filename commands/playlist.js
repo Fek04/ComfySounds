@@ -56,7 +56,7 @@ module.exports = {
                 const videoResult = await ytsr(query, {limit: 1});
                 return (videoResult.items.length >= 1) ? videoResult.items[0] : null;
             } catch (error) {
-                console.log("AAAAAAAAAAAAa  \n"+error);
+                console.log("Error during videofinder  \n"+error);
                 return null;
             }
         }
