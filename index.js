@@ -1,6 +1,6 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const ytdl = require('ytdl-core');
+const fs = require('fs');
+const path = require('path');
+const ytdl = require('@distube/ytdl-core');
 
 // Require the necessary discord.js classes
 const { Client, Collection, GatewayIntentBits, EmbedBuilder } = require('discord.js');

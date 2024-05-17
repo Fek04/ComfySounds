@@ -3,7 +3,7 @@ const { joinVoiceChannel } = require('@discordjs/voice');
 
 const { VoiceConnectionStatus } = require('@discordjs/voice');
 
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 const ytsr = require('ytsr');
 
 const fetch = require('isomorphic-unfetch');
