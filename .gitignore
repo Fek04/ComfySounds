@@ -1,5 +1,5 @@
 config.json
-node_modules/*
+node_modules/
 SymphonyNo6.mp3
 configTest.json
 configComfy.json
